@@ -1,0 +1,5 @@
+# For running unit tests on a PC or in CI only.
+# Do NOT install these on the Jetson: pip OpenCV has no GStreamer and shadows JetPack's OpenCV.
+pytest>=8
+numpy
+opencv-python-headless
