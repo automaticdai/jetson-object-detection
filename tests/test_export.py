@@ -1,3 +1,5 @@
+import sys
+import types
 from pathlib import Path
 
 import pytest
@@ -61,6 +63,10 @@ def test_parse_args_defaults():
     ["--precision", "fp32"],
     ["--model", "yolo11n.pt"],      # Review Focus 5: a file, not a model name
     ["--model", "weights/best"],
+    ["--model", "yolo11n.PT"],      # any file extension, any case
+    ["--model", "best.onnx"],
+    ["--model", "yolo11n.engine"],
+    ["--model", "weights\\best"],
 ])
 def test_parse_args_rejects(argv):
     with pytest.raises(SystemExit):
@@ -72,3 +78,19 @@ def test_main_skips_existing_engine(monkeypatch, tmp_path, capsys):
     (tmp_path / "yolo11n_fp16_640.engine").write_bytes(b"x")
     assert export.main(["--model", "yolo11n"]) == 0  # would fail importing ultralytics if it tried to build
     assert "already exists" in capsys.readouterr().out
+
+
+def test_main_unknown_model_exits_1(monkeypatch, tmp_path, capsys):
+    # e.g. the common typo "yolov11n": attempt_download_asset finds nothing and returns a path that doesn't exist.
+    ultralytics = types.ModuleType("ultralytics")
+    ultralytics.YOLO = lambda weights: pytest.fail("YOLO() should not be called without weights")
+    downloads = types.ModuleType("ultralytics.utils.downloads")
+    downloads.attempt_download_asset = lambda path: path
+    monkeypatch.setitem(sys.modules, "ultralytics", ultralytics)
+    monkeypatch.setitem(sys.modules, "ultralytics.utils", types.ModuleType("ultralytics.utils"))
+    monkeypatch.setitem(sys.modules, "ultralytics.utils.downloads", downloads)
+    monkeypatch.setattr(export, "MODELS_DIR", tmp_path)
+
+    assert export.main(["--model", "yolov11n"]) == 1
+    out = capsys.readouterr().out
+    assert "Could not find or download 'yolov11n.pt'" in out

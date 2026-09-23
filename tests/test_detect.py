@@ -74,6 +74,16 @@ def test_parse_args_defaults():
     assert (args.conf, args.classes, args.save, args.headless, args.source) == (0.25, None, None, False, "csi")
 
 
+def test_main_without_gui_exits_1_before_loading(tmp_path, monkeypatch, capsys):
+    # The Ultralytics Jetson image ships headless OpenCV; opening a window would crash on the first frame.
+    monkeypatch.setenv("DISPLAY", ":0")
+    engine = tmp_path / "yolo11n_fp16_640.engine"
+    engine.write_bytes(b"x")
+    monkeypatch.setattr(detect, "load_model", lambda e: pytest.fail("should exit before loading the engine"))
+    assert detect.main(["--engine", str(engine)]) == 1
+    assert "no GUI support" in capsys.readouterr().out
+
+
 def test_main_missing_engine_exits_1(tmp_path, capsys):
     rc = detect.main(["--engine", str(tmp_path / "yolo11n_fp16_640.engine"), "--headless"])
     assert rc == 1

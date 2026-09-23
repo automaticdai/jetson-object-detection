@@ -61,7 +61,8 @@ def parse_args(argv=None):
     parser.add_argument("--calib-data", default=None, help=f"INT8 calibration dataset yaml (default: {DEFAULT_CALIB_DATA})")
     parser.add_argument("--force", action="store_true", help="rebuild even if the engine already exists")
     args = parser.parse_args(argv)
-    if "/" in args.model or args.model.endswith(".pt"):
+    # Ultralytics model names (yolo11n, yolo26s, rtdetr-l) have no separators or dots.
+    if "/" in args.model or "\\" in args.model or Path(args.model).suffix:
         parser.error(f"--model takes a model name such as yolo11n, not a file path (got '{args.model}')")
     if args.imgsz <= 0 or args.imgsz % 32:
         parser.error(f"--imgsz must be a positive multiple of 32 (got {args.imgsz})")
@@ -85,6 +86,12 @@ def main(argv=None):
 
     out.parent.mkdir(parents=True, exist_ok=True)
     weights = attempt_download_asset(str(out.parent / f"{args.model}.pt"))  # no-op if already downloaded
+    if not Path(weights).exists():
+        print(
+            f"Could not find or download '{args.model}.pt'. "
+            "Check the model name (e.g. yolo11n, yolo11s, yolo26n) and your network connection."
+        )
+        return 1
     print(f"Building {out.name}. This can take several minutes...")
     kwargs = export_kwargs(args.precision, args.imgsz, calib_data, supports_quantize_arg())
     built = YOLO(weights).export(**kwargs)

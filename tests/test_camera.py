@@ -1,4 +1,8 @@
 import argparse
+import os
+import subprocess
+import sys
+from pathlib import Path
 
 import cv2 as cv
 import numpy as np
@@ -55,3 +59,34 @@ def test_open_capture_from_args_passes_source(monkeypatch):
     args = argparse.Namespace(source="usb", sensor_id=0, device=2, width=640, height=480, fps=60, flip=0)
     assert camera.open_capture_from_args(args) == "cap"
     assert seen == dict(source="usb", sensor_id=0, device=2, width=640, height=480, fps=60, flip=0)
+
+
+def test_has_gui_false_on_headless_opencv():
+    # requirements-dev.txt installs opencv-python-headless, like the Ultralytics Jetson image does.
+    assert camera.has_gui() is False
+
+
+def test_window_error_none_when_headless(monkeypatch):
+    monkeypatch.delenv("DISPLAY", raising=False)
+    assert camera.window_error(headless=True) is None
+
+
+def test_window_error_no_display(monkeypatch):
+    monkeypatch.delenv("DISPLAY", raising=False)
+    assert camera.window_error(headless=False) == camera.NO_DISPLAY_MSG
+
+
+def test_window_error_no_gui(monkeypatch):
+    monkeypatch.setenv("DISPLAY", ":0")
+    assert camera.window_error(headless=False) == camera.NO_GUI_MSG
+
+
+def test_camera_test_without_gui_exits_cleanly(tmp_path):
+    script = Path(__file__).resolve().parent.parent / "src" / "camera_test.py"
+    env = {**os.environ, "DISPLAY": ":0"}
+    proc = subprocess.run(
+        [sys.executable, str(script), "--source", str(tmp_path / "x.mp4")], capture_output=True, text=True, env=env
+    )
+    assert proc.returncode == 1
+    assert "no GUI support" in proc.stdout
+    assert "Traceback" not in proc.stderr

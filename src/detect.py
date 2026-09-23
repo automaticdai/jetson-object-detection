@@ -17,7 +17,7 @@ from pathlib import Path
 import cv2 as cv
 import numpy as np
 
-from camera import NO_DISPLAY_MSG, CameraError, add_camera_args, display_available, open_capture_from_args
+from camera import CameraError, add_camera_args, open_capture_from_args, window_error
 from export import export_command, parse_engine_name
 from timing import StageTimer
 
@@ -111,8 +111,9 @@ def load_model(engine):
 def main(argv=None):
     args = parse_args(argv)
 
-    if not args.headless and not display_available():
-        print(NO_DISPLAY_MSG)
+    error = window_error(args.headless)
+    if error:
+        print(error)
         return 1
     if not args.engine.exists():
         print(missing_engine_message(args.engine))

@@ -12,7 +12,7 @@ import time
 
 import cv2 as cv
 
-from camera import NO_DISPLAY_MSG, CameraError, add_camera_args, display_available, open_capture_from_args
+from camera import CameraError, add_camera_args, open_capture_from_args, window_error
 
 
 def parse_args():
@@ -25,8 +25,9 @@ def parse_args():
 def main():
     args = parse_args()
 
-    if not args.headless and not display_available():
-        print(NO_DISPLAY_MSG)
+    error = window_error(args.headless)
+    if error:
+        print(error)
         sys.exit(1)
 
     try:

@@ -5,6 +5,11 @@ import re
 import cv2 as cv
 
 NO_DISPLAY_MSG = "No display found ($DISPLAY is not set). Run with --headless, or use X forwarding / a monitor."
+NO_GUI_MSG = (
+    "This OpenCV build has no GUI support, so it cannot open a window "
+    "(the Ultralytics Docker image ships opencv-python-headless).\n"
+    "Run with --headless (add --save out.mp4 to record the result)."
+)
 
 
 class CameraError(RuntimeError):
@@ -72,3 +77,18 @@ def add_camera_args(parser):
 
 def display_available():
     return bool(os.environ.get("DISPLAY"))
+
+
+def has_gui():
+    return re.search(r"^\s*GUI:\s*NONE\s*$", cv.getBuildInformation(), re.MULTILINE) is None
+
+
+def window_error(headless):
+    """Why a preview window cannot be opened, or None if it can (or none is needed)."""
+    if headless:
+        return None
+    if not display_available():
+        return NO_DISPLAY_MSG
+    if not has_gui():
+        return NO_GUI_MSG
+    return None
