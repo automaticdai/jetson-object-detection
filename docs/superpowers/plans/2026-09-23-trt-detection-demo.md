@@ -153,7 +153,8 @@ docker/run.sh python3 src/camera_test.py --source csi --headless   # Ctrl+C afte
 docker/run.sh python3 src/camera_test.py --source usb --headless   # if a USB camera is attached
 ```
 Expected: the CSI preview shows and prints ~30 FPS.
-**Decision gate:** if the CSI camera fails with "no GStreamer support", **stop and report to the user**. Continue Tasks 2–5 (they don't depend on this), but Task 6 waits for the user to choose a fallback (spec, Risks §1).
+**Most likely outcome:** the image ships `opencv-python-headless` (per its Dockerfile), so the first, windowed command prints "no GUI support", and the CSI commands print "no GStreamer support". In that case only `--headless` runs of USB cameras and files work in the stock image.
+**Decision gate:** if the CSI camera fails with "no GStreamer support", or windows fail with "no GUI support", **stop and report to the user**. Continue Tasks 2–5 (they don't depend on this), but Task 6 waits for the user to choose a fallback (spec, Risks §1).
 
 - [ ] **Step 6: [Jetson] Pin the image**
 

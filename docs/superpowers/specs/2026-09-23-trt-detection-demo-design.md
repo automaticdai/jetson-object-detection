@@ -122,6 +122,7 @@ Every case below prints a clear message and exits with a non-zero code:
 ## Risks
 
 1. **CSI inside Docker.** The Ultralytics Jetson image probably installs OpenCV from pip, which has no GStreamer, so CSI cameras won't open. USB and file sources still work.
-   *Fallback:* a small custom image `FROM` the Ultralytics image, with a GStreamer-enabled OpenCV (from JetPack's apt packages, or built from source). This is decided after hardware check 1.
+   The image's Dockerfile swaps in `opencv-python-headless`, so it has **no GUI support** either: windows cannot open. `camera.window_error()` catches this up front and tells the user to run `--headless`.
+   *Fallback:* a small custom image `FROM` the Ultralytics image, with an OpenCV that has both GStreamer and GUI support (from JetPack's apt packages, or built from source). This is decided after hardware check 1.
 2. **Thor / JetPack 7 image.** Ultralytics publishes `ultralytics/ultralytics:latest-nvidia-arm64` for JetPack 7.0 (Thor). Its docs say JetPack 7.2 needs a native install for now. `run.sh` maps L4T R36 → `latest-jetson-jetpack6` and R38 → `latest-nvidia-arm64`. Thor stays "untested" until someone runs it.
 3. **Ultralytics API drift.** Pin the image tag in `run.sh`, and note the Ultralytics version the demo was tested with.
