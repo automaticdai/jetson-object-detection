@@ -52,7 +52,7 @@ python3 src/export.py --model yolo11n --precision fp16|int8 --imgsz 640 [--calib
 ```
 - Output: `models/<model>_<precision>_<imgsz>.engine` (e.g. `models/yolo11n_fp16_640.engine`). The name is built by one function, `engine_path(model, precision, imgsz)`, which is unit-tested.
 - Skips the build if the engine already exists, unless `--force` is given.
-- INT8: `export(format="engine", int8=True, data=<calib-data>)`. If `--calib-data` is left out, it uses `coco8.yaml` and warns that such a small calibration set may reduce accuracy.
+- INT8: `export(format="engine", int8=True, data=<calib-data>)` on older Ultralytics, `quantize=8` on newer versions. The script checks which one the installed version supports (whether `quantize` is in `ultralytics.utils.DEFAULT_CFG_DICT`). If `--calib-data` is left out, it uses `coco8.yaml` and warns that such a small calibration set may reduce accuracy.
 - FP16: `export(format="engine", half=True)`.
 - Downloads the `.pt` weights into `models/` if they're missing (Ultralytics does this automatically).
 - Engines only run on the board/TensorRT version they were built with. The README and `--help` say to export on the target device.
@@ -79,13 +79,14 @@ python3 src/detect.py --engine models/yolo11n_fp16_640.engine [camera flags] \
 ## Data flow (`detect.py`)
 
 ```
-open_capture ─► read frame ─► model.predict(frame, conf, classes, imgsz, verbose=False)
+open_capture ─► read frame ─► model.predict(frame, conf, classes, verbose=False)
                                   │  result.speed → preprocess / inference / postprocess ms
                   draw boxes (result.plot()) + overlay (FPS, per-stage ms)
                                   ├─► cv.imshow       (unless --headless)
                                   └─► VideoWriter     (if --save)
 ```
 
+- `imgsz` is not passed to `predict`: a TensorRT engine has a fixed input size, and Ultralytics reads it from the engine's metadata.
 - Capture and draw are timed with `time.perf_counter()`. The pre/infer/post times come from `result.speed`.
 - `StageTimer`: a rolling average over the last 30 frames for each stage, plus FPS. It's a pure-Python class and unit-tested.
 
@@ -122,5 +123,5 @@ Every case below prints a clear message and exits with a non-zero code:
 
 1. **CSI inside Docker.** The Ultralytics Jetson image probably installs OpenCV from pip, which has no GStreamer, so CSI cameras won't open. USB and file sources still work.
    *Fallback:* a small custom image `FROM` the Ultralytics image, with a GStreamer-enabled OpenCV (from JetPack's apt packages, or built from source). This is decided after hardware check 1.
-2. **Thor / JetPack 7 image.** It's unconfirmed whether Ultralytics publishes a JetPack 7 image. If not, Thor support is documented as "native install, untested" for now.
+2. **Thor / JetPack 7 image.** Ultralytics publishes `ultralytics/ultralytics:latest-nvidia-arm64` for JetPack 7.0 (Thor). Its docs say JetPack 7.2 needs a native install for now. `run.sh` maps L4T R36 → `latest-jetson-jetpack6` and R38 → `latest-nvidia-arm64`. Thor stays "untested" until someone runs it.
 3. **Ultralytics API drift.** Pin the image tag in `run.sh`, and note the Ultralytics version the demo was tested with.
