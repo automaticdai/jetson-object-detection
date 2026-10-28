@@ -129,6 +129,22 @@ python3 src/detect.py --engine models/yolo11n_fp16_640.engine --headless --strea
 
 This also works inside the Docker container, which `docker/run.sh` starts with host networking. The stream is plain MJPEG over HTTP with no password: **anyone who can reach the port can watch the camera**. Use `--stream-host 127.0.0.1` to serve it to the Jetson only, and an SSH tunnel (`ssh -L 8080:localhost:8080 jetson`) to view it from your PC.
 
+### Benchmark
+`src/benchmark.py` runs the same frames through each engine and prints a comparison table. Frames are loaded into memory first, so the camera and video decoding don't affect the numbers:
+
+```bash
+python3 src/benchmark.py                                  # every engine in models/, on Ultralytics' bus.jpg
+python3 src/benchmark.py --engines models/yolo11n_fp16_640.engine models/yolo11n_int8_640.engine
+python3 src/benchmark.py --source video.mp4 --frames 500 --csv results/orin.csv
+```
+
+The device, JetPack release and power mode are printed with the results (and saved in the CSV), because Jetson performance depends on them. For the best numbers, set the highest power mode first, e.g. `sudo nvpmodel -m 0 && sudo jetson_clocks`.
+
+| Device | Engine | FPS | Infer (ms) |
+|---|---|---|---|
+| Jetson AGX Orin | yolo11n FP16 640 | *to be measured* | |
+| Jetson AGX Orin | yolo11n INT8 640 | *to be measured* | |
+
 ### Native install (without Docker)
 Needed for CSI cameras and preview windows, because it keeps JetPack's OpenCV:
 
