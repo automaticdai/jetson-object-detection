@@ -90,3 +90,24 @@ def test_camera_test_without_gui_exits_cleanly(tmp_path):
     assert proc.returncode == 1
     assert "no GUI support" in proc.stdout
     assert "Traceback" not in proc.stderr
+
+
+def test_usb_requests_mjpg_before_resolution(monkeypatch):
+    calls = []
+
+    class RecordingCapture:
+        def __init__(self, *args):
+            pass
+
+        def set(self, prop, value):
+            calls.append((prop, value))
+            return True
+
+        def isOpened(self):
+            return True
+
+    monkeypatch.setattr(camera.cv, "VideoCapture", RecordingCapture)
+    camera.open_capture("usb", width=1280, height=720)
+    props = [prop for prop, _ in calls]
+    assert calls[0] == (cv.CAP_PROP_FOURCC, cv.VideoWriter_fourcc(*"MJPG"))
+    assert props.index(cv.CAP_PROP_FOURCC) < props.index(cv.CAP_PROP_FRAME_WIDTH)

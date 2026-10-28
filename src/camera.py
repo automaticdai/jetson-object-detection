@@ -42,6 +42,9 @@ def open_capture(source, *, sensor_id=0, device=0, width=1280, height=720, fps=3
         cap = cv.VideoCapture(gstreamer_pipeline(sensor_id, width, height, fps, flip), cv.CAP_GSTREAMER)
     elif source == "usb":
         cap = cv.VideoCapture(device, cv.CAP_V4L2)
+        # Most USB webcams only reach 30 FPS at 720p+ with MJPG; the default (YUYV) is often 10 FPS or less.
+        # Cameras without MJPG ignore this and keep their default format.
+        cap.set(cv.CAP_PROP_FOURCC, cv.VideoWriter_fourcc(*"MJPG"))
         cap.set(cv.CAP_PROP_FRAME_WIDTH, width)
         cap.set(cv.CAP_PROP_FRAME_HEIGHT, height)
         cap.set(cv.CAP_PROP_FPS, fps)
