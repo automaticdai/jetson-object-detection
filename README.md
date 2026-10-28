@@ -1,5 +1,9 @@
 # jetson-object-detection
 
+![](https://img.shields.io/github/stars/automaticdai/jetson-object-detection) ![](https://img.shields.io/github/forks/automaticdai/jetson-object-detection) ![](https://img.shields.io/github/license/automaticdai/jetson-object-detection)
+
+![jetson-object-detection](./images/cover.png)
+
 Following the success of my other project, [rpi-object-detection](https://github.com/automaticdai/rpi-object-detection), I am making this new project focusing on Nvidia Jetson. As many configurations are different on Jetson, I think this is a better way to have a new repo, rather than a hybrid integration to support multiple platforms. Due to the on-board GPU, with Jetson, I am going to produce more interesting CV-based projects.
 
 Star the project and stay tuned!
