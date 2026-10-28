@@ -6,6 +6,7 @@ Examples:
     python3 src/export.py                                   # models/yolo11n_fp16_640.engine
     python3 src/export.py --precision int8                  # INT8, calibrated on coco8 (small, quick)
     python3 src/export.py --model yolo11s --precision int8 --calib-data coco128.yaml
+    python3 src/export.py --model yolo11n-seg                # instance segmentation; -pose for pose estimation
 """
 import argparse
 import re
@@ -15,6 +16,8 @@ from pathlib import Path
 
 MODELS_DIR = Path(__file__).resolve().parent.parent / "models"
 DEFAULT_CALIB_DATA = "coco8.yaml"
+# INT8 calibration runs the model's own task, so seg/pose models need a dataset with masks/keypoints.
+TASK_CALIB_DATA = {"-seg": "coco8-seg.yaml", "-pose": "coco8-pose.yaml"}
 _ENGINE_NAME = re.compile(r"^(?P<model>.+)_(?P<precision>fp16|int8)_(?P<imgsz>\d+)\.engine$")
 
 
@@ -31,6 +34,13 @@ def parse_engine_name(path):
 
 def export_command(model, precision, imgsz):
     return f"python3 src/export.py --model {model} --precision {precision} --imgsz {imgsz}"
+
+
+def default_calib_data(model):
+    for suffix, data in TASK_CALIB_DATA.items():
+        if model.endswith(suffix):
+            return data
+    return DEFAULT_CALIB_DATA
 
 
 def export_kwargs(precision, imgsz, calib_data, quantize_api):
@@ -58,7 +68,7 @@ def parse_args(argv=None):
     parser.add_argument("--model", default="yolo11n", help="Ultralytics model name, e.g. yolo11n, yolo11s (default: yolo11n)")
     parser.add_argument("--precision", choices=["fp16", "int8"], default="fp16")
     parser.add_argument("--imgsz", type=int, default=640, help="input size, a multiple of 32 (default: 640)")
-    parser.add_argument("--calib-data", default=None, help=f"INT8 calibration dataset yaml (default: {DEFAULT_CALIB_DATA})")
+    parser.add_argument("--calib-data", default=None, help=f"INT8 calibration dataset yaml (default: {DEFAULT_CALIB_DATA}, or the -seg/-pose variant)")
     parser.add_argument("--force", action="store_true", help="rebuild even if the engine already exists")
     args = parser.parse_args(argv)
     # Ultralytics model names (yolo11n, yolo26s, rtdetr-l) have no separators or dots.
@@ -78,7 +88,7 @@ def main(argv=None):
 
     calib_data = args.calib_data
     if args.precision == "int8" and calib_data is None:
-        calib_data = DEFAULT_CALIB_DATA
+        calib_data = default_calib_data(args.model)
         print(f"Warning: no --calib-data given; calibrating on {calib_data}, which is tiny and may reduce INT8 accuracy.")
 
     from ultralytics import YOLO
