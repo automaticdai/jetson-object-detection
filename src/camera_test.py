@@ -53,7 +53,7 @@ def main():
                 frames = 0
                 t_last = now
                 if args.headless:
-                    print(f"{fps:.1f} FPS ({frame.shape[1]}x{frame.shape[0]})")
+                    print(f"{fps:.1f} FPS ({frame.shape[1]}x{frame.shape[0]})", flush=True)
 
             if not args.headless:
                 cv.putText(frame, f"{fps:.1f} FPS", (10, 30), cv.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)

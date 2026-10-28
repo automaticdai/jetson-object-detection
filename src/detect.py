@@ -156,7 +156,7 @@ def main(argv=None):
             if args.headless:
                 now = time.perf_counter()
                 if now - last_print >= 1.0:
-                    print(" | ".join(overlay_lines(timer)))
+                    print(" | ".join(overlay_lines(timer)), flush=True)
                     last_print = now
             else:
                 cv.imshow("Detection", annotated)
