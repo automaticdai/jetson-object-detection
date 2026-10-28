@@ -11,9 +11,11 @@ Examples:
     python3 src/detect.py --engine models/yolo11n_int8_640.engine --source video.mp4 --save out.mp4 --headless
     python3 src/detect.py --engine models/yolo11n_fp16_640.engine --track            # keep IDs across frames
     python3 src/detect.py --engine models/yolo11n_fp16_640.engine --threaded         # overlap capture and inference
+    python3 src/detect.py --engine models/yolo11n_fp16_640.engine --headless --stream 8080   # watch in a browser
 """
 import argparse
 import math
+import socket
 import sys
 import time
 from pathlib import Path
@@ -23,6 +25,7 @@ import numpy as np
 
 from camera import CameraError, ThreadedCapture, add_camera_args, open_capture_from_args, window_error
 from export import export_command, parse_engine_name
+from stream import MjpegServer
 from timing import StageTimer
 
 DEFAULT_FPS = 30.0
@@ -54,6 +57,18 @@ def parse_args(argv=None):
         action="store_true",
         help="read frames on a background thread so capture overlaps with inference (higher FPS; "
         "'capture' then shows only the wait for a frame)",
+    )
+    parser.add_argument(
+        "--stream",
+        type=int,
+        default=None,
+        metavar="PORT",
+        help="serve the annotated video at http://<this device>:PORT/ (MJPEG, any browser)",
+    )
+    parser.add_argument(
+        "--stream-host",
+        default="0.0.0.0",
+        help="address to serve the stream on (default: 0.0.0.0 = all networks; 127.0.0.1 = this device only)",
     )
     parser.add_argument("--save", type=Path, default=None, help="save the annotated video to this .mp4 file")
     parser.add_argument("--headless", action="store_true", help="do not open a window; print FPS and timings instead")
@@ -120,6 +135,12 @@ def run_model(model, frame, args, classes):
     return model.predict(frame, conf=args.conf, classes=classes, verbose=False)[0]
 
 
+def stream_url(host, port):
+    if host in ("0.0.0.0", ""):
+        host = socket.gethostname()
+    return f"http://{host}:{port}/"
+
+
 def load_model(engine):
     from ultralytics import YOLO
 
@@ -147,6 +168,15 @@ def main(argv=None):
     if not args.engine.exists():
         print(missing_engine_message(args.engine))
         return 1
+
+    stream = None
+    if args.stream is not None:
+        try:
+            stream = MjpegServer(args.stream, host=args.stream_host).start()
+        except OSError as e:  # e.g. port already in use
+            print(f"Cannot serve the stream on {args.stream_host}:{args.stream}: {e}")
+            return 1
+        print(f"Streaming at {stream_url(args.stream_host, stream.port)}", flush=True)
 
     try:
         model = load_model(args.engine)
@@ -185,6 +215,10 @@ def main(argv=None):
                     writer = open_writer(args.save, (annotated.shape[1], annotated.shape[0]), fps_out)
                 writer.write(annotated)
 
+            if stream is not None:
+                with timer.measure("stream"):
+                    stream.publish(annotated)
+
             if args.headless:
                 now = time.perf_counter()
                 if now - last_print >= 1.0:
@@ -203,6 +237,8 @@ def main(argv=None):
         cap.release()
         if writer is not None:
             writer.release()
+        if stream is not None:
+            stream.stop()
         if not args.headless:
             cv.destroyAllWindows()
     return 0
