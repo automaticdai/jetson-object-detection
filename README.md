@@ -89,6 +89,16 @@ python3 src/detect.py --engine models/yolo11n_fp16_640.engine --source video.mp4
 
 Press `q` to quit. With `--headless`, FPS and stage timings are printed once per second instead. All camera options from `camera_test.py` (`--source`, `--width`, `--flip`, ...) work here too.
 
+### Object tracking
+Add `--track` to follow objects across frames: each box gets an ID that stays the same while the object is in view.
+
+```bash
+python3 src/detect.py --engine models/yolo11n_fp16_640.engine --track            # ByteTrack (default)
+python3 src/detect.py --engine models/yolo11n_fp16_640.engine --track botsort    # BoT-SORT
+```
+
+Ultralytics installs the tracker's `lap` dependency on first use if it is missing, so the first run needs a network connection.
+
 ### Native install (without Docker)
 Needed for CSI cameras and preview windows, because it keeps JetPack's OpenCV:
 

@@ -7,6 +7,7 @@ Examples:
     python3 src/detect.py --engine models/yolo11n_fp16_640.engine
     python3 src/detect.py --engine models/yolo11n_fp16_640.engine --source usb --classes person,car --conf 0.5
     python3 src/detect.py --engine models/yolo11n_int8_640.engine --source video.mp4 --save out.mp4 --headless
+    python3 src/detect.py --engine models/yolo11n_fp16_640.engine --track            # keep IDs across frames
 """
 import argparse
 import math
@@ -37,6 +38,14 @@ def parse_args(argv=None):
     add_camera_args(parser)
     parser.add_argument("--conf", type=conf_value, default=0.25, help="confidence threshold, 0-1 (default: 0.25)")
     parser.add_argument("--classes", default=None, help="comma-separated class names, e.g. person,car (default: all)")
+    parser.add_argument(
+        "--track",
+        nargs="?",
+        const="bytetrack",
+        choices=["bytetrack", "botsort"],
+        default=None,
+        help="track objects across frames and label them with IDs (default tracker: bytetrack)",
+    )
     parser.add_argument("--save", type=Path, default=None, help="save the annotated video to this .mp4 file")
     parser.add_argument("--headless", action="store_true", help="do not open a window; print FPS and timings instead")
     return parser.parse_args(argv)
@@ -92,6 +101,16 @@ def missing_engine_message(engine):
     return f"Engine not found: {engine}\nBuild it on this device first:\n    {command}"
 
 
+def run_model(model, frame, args, classes):
+    """One frame through the model: plain detection, or detection + tracking with persistent IDs."""
+    if args.track:
+        # persist=True keeps the tracker state between calls, so IDs survive from frame to frame.
+        return model.track(
+            frame, conf=args.conf, classes=classes, tracker=f"{args.track}.yaml", persist=True, verbose=False
+        )[0]
+    return model.predict(frame, conf=args.conf, classes=classes, verbose=False)[0]
+
+
 def load_model(engine):
     from ultralytics import YOLO
 
@@ -139,7 +158,7 @@ def main(argv=None):
                 print("End of stream or camera disconnected.")
                 break
 
-            result = model.predict(frame, conf=args.conf, classes=classes, verbose=False)[0]
+            result = run_model(model, frame, args, classes)
             for stage, ms in result.speed.items():  # preprocess, inference, postprocess
                 timer.add(stage, ms)
 
