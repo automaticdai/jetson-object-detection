@@ -7,6 +7,7 @@ Examples:
     python3 src/benchmark.py                                   # every engine in models/, on Ultralytics' bus.jpg
     python3 src/benchmark.py --engines models/yolo11n_fp16_640.engine models/yolo11n_int8_640.engine
     python3 src/benchmark.py --source video.mp4 --frames 500 --csv results/orin.csv
+    python3 src/benchmark.py --backend tensorrt --source bus.jpg     # Jetson Nano (no Ultralytics)
 """
 import argparse
 import csv
@@ -18,7 +19,7 @@ from pathlib import Path
 
 import cv2 as cv
 
-from detect import load_model
+from detect import load_model, resolve_backend
 from export import MODELS_DIR
 
 STAGES = ("preprocess", "inference", "postprocess")
@@ -30,6 +31,8 @@ def parse_args(argv=None):
     parser.add_argument("--source", default=None, help="image or video to run on (default: Ultralytics' bus.jpg)")
     parser.add_argument("--frames", type=int, default=300, help="timed frames per engine (default: 300)")
     parser.add_argument("--warmup", type=int, default=30, help="untimed frames per engine first (default: 30)")
+    parser.add_argument("--backend", choices=["auto", "ultralytics", "tensorrt"], default="auto",
+                        help="as in detect.py (default: auto)")
     parser.add_argument("--csv", type=Path, default=None, help="also write the results to this CSV file")
     args = parser.parse_args(argv)
     if args.frames <= 0 or args.warmup < 0:
@@ -78,8 +81,8 @@ def summarize(name, latencies_ms, stage_ms):
     return row
 
 
-def run_engine(engine, frames, warmup):
-    model = load_model(engine)
+def run_engine(engine, frames, warmup, backend="ultralytics"):
+    model = load_model(engine, backend)
     for frame in frames[:warmup]:
         model.predict(frame, verbose=False)
     latencies, stage_ms = [], {stage: [] for stage in STAGES}
@@ -106,7 +109,9 @@ def device_info():
     except (OSError, IndexError, ValueError):
         pass
     try:
-        out = subprocess.run(["nvpmodel", "-q"], capture_output=True, text=True, timeout=5).stdout
+        out = subprocess.run(  # no capture_output/text: Python 3.6 on the Jetson Nano
+            ["nvpmodel", "-q"], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, universal_newlines=True, timeout=5
+        ).stdout
         mode = next(line.split(":", 1)[1].strip() for line in out.splitlines() if "Power Mode" in line)
         parts.append(f"power mode {mode}")
     except (OSError, subprocess.SubprocessError, StopIteration):
@@ -143,6 +148,10 @@ def main(argv=None):
         print(f"Engine(s) not found: {', '.join(missing)}")
         return 1
 
+    backend = resolve_backend(args.backend)
+    if args.source is None and backend == "tensorrt":
+        print("The tensorrt backend has no bundled test image; pass --source IMAGE_OR_VIDEO.")
+        return 1
     source = args.source or default_source()
     try:
         frames = load_frames(source, args.frames)
@@ -157,7 +166,7 @@ def main(argv=None):
     for engine in engines:
         print(f"Running {Path(engine).name}...", flush=True)
         try:
-            rows.append(run_engine(engine, frames, args.warmup))
+            rows.append(run_engine(engine, frames, args.warmup, backend))
         except RuntimeError as e:  # e.g. built on another device
             print(e)
             return 1

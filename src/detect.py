@@ -12,8 +12,10 @@ Examples:
     python3 src/detect.py --engine models/yolo11n_fp16_640.engine --track            # keep IDs across frames
     python3 src/detect.py --engine models/yolo11n_fp16_640.engine --threaded         # overlap capture and inference
     python3 src/detect.py --engine models/yolo11n_fp16_640.engine --headless --stream 8080   # watch in a browser
+    python3 src/detect.py --engine models/yolo11n_fp16_320.engine --backend tensorrt     # Jetson Nano (no Ultralytics)
 """
 import argparse
+import importlib.util
 import math
 import socket
 import sys
@@ -41,6 +43,13 @@ def conf_value(text):
 def parse_args(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--engine", type=Path, required=True, help="TensorRT engine built by src/export.py")
+    parser.add_argument(
+        "--backend",
+        choices=["auto", "ultralytics", "tensorrt"],
+        default="auto",
+        help="ultralytics (JetPack 6+), or tensorrt for engines built with trtexec on older boards such as "
+        "the Jetson Nano (detection only). auto: ultralytics if it is installed (default: auto)",
+    )
     add_camera_args(parser)
     parser.add_argument("--conf", type=conf_value, default=0.25, help="confidence threshold, 0-1 (default: 0.25)")
     parser.add_argument("--classes", default=None, help="comma-separated class names, e.g. person,car (default: all)")
@@ -119,7 +128,23 @@ def draw_overlay(frame, lines):
         cv.putText(frame, line, (10, 30 + i * 28), cv.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
 
 
-def missing_engine_message(engine):
+NANO_BUILD_HELP = (
+    "On a PC:     yolo export model=yolo11n.pt format=onnx opset=12 imgsz=320\n"
+    "On the Jetson: /usr/src/tensorrt/bin/trtexec --onnx=yolo11n.onnx --saveEngine={engine} --fp16"
+)
+
+
+def resolve_backend(choice):
+    if choice != "auto":
+        return choice
+    return "ultralytics" if importlib.util.find_spec("ultralytics") else "tensorrt"
+
+
+def missing_engine_message(engine, backend="ultralytics"):
+    if backend == "tensorrt":
+        return f"Engine not found: {engine}\nBuild it like this (see README, Jetson Nano):\n" + NANO_BUILD_HELP.format(
+            engine=engine
+        )
     parsed = parse_engine_name(engine)
     command = export_command(*parsed) if parsed else "python3 src/export.py --model yolo11n --precision fp16"
     return f"Engine not found: {engine}\nBuild it on this device first:\n    {command}"
@@ -141,7 +166,12 @@ def stream_url(host, port):
     return f"http://{host}:{port}/"
 
 
-def load_model(engine):
+def load_model(engine, backend="ultralytics"):
+    if backend == "tensorrt":
+        from trt_yolo import TrtYolo
+
+        return TrtYolo(engine)  # raises RuntimeError with a rebuild hint if the engine won't load
+
     from ultralytics import YOLO
 
     # No task= here: Ultralytics reads it from the engine's metadata, so -seg and -pose engines work too.
@@ -160,13 +190,17 @@ def load_model(engine):
 
 def main(argv=None):
     args = parse_args(argv)
+    backend = resolve_backend(args.backend)
+    if backend == "tensorrt" and args.track:
+        print("--track needs the ultralytics backend; the tensorrt backend only detects.")
+        return 1
 
     error = window_error(args.headless)
     if error:
         print(error)
         return 1
     if not args.engine.exists():
-        print(missing_engine_message(args.engine))
+        print(missing_engine_message(args.engine, backend))
         return 1
 
     stream = None
@@ -179,7 +213,7 @@ def main(argv=None):
         print(f"Streaming at {stream_url(args.stream_host, stream.port)}", flush=True)
 
     try:
-        model = load_model(args.engine)
+        model = load_model(args.engine, backend)
         classes = resolve_classes(args.classes, model.names)
         cap = open_capture_from_args(args)
         if args.threaded:
@@ -211,9 +245,10 @@ def main(argv=None):
             timer.tick()
 
             if args.save:
-                if writer is None:
-                    writer = open_writer(args.save, (annotated.shape[1], annotated.shape[0]), fps_out)
-                writer.write(annotated)
+                with timer.measure("save"):  # video encoding is slow on small boards, so show its cost
+                    if writer is None:
+                        writer = open_writer(args.save, (annotated.shape[1], annotated.shape[0]), fps_out)
+                    writer.write(annotated)
 
             if stream is not None:
                 with timer.measure("stream"):

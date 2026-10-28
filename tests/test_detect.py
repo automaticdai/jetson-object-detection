@@ -85,7 +85,7 @@ def test_main_without_gui_exits_1_before_loading(tmp_path, monkeypatch, capsys):
 
 
 def test_main_missing_engine_exits_1(tmp_path, capsys):
-    rc = detect.main(["--engine", str(tmp_path / "yolo11n_fp16_640.engine"), "--headless"])
+    rc = detect.main(["--engine", str(tmp_path / "yolo11n_fp16_640.engine"), "--headless", "--backend", "ultralytics"])
     assert rc == 1
     assert "python3 src/export.py --model yolo11n --precision fp16 --imgsz 640" in capsys.readouterr().out
 
@@ -125,3 +125,21 @@ def test_run_model_tracks_with_persistent_state():
     method, kwargs = model.calls[0]
     assert method == "track"
     assert kwargs["persist"] is True and kwargs["tracker"] == "botsort.yaml"
+
+
+def test_resolve_backend(monkeypatch):
+    assert detect.resolve_backend("tensorrt") == "tensorrt"
+    monkeypatch.setattr(detect.importlib.util, "find_spec", lambda name: None)
+    assert detect.resolve_backend("auto") == "tensorrt"
+    monkeypatch.setattr(detect.importlib.util, "find_spec", lambda name: object())
+    assert detect.resolve_backend("auto") == "ultralytics"
+
+
+def test_tensorrt_backend_rejects_track(capsys):
+    assert detect.main(["--engine", "m.engine", "--backend", "tensorrt", "--track", "--headless"]) == 1
+    assert "ultralytics backend" in capsys.readouterr().out
+
+
+def test_missing_engine_message_for_tensorrt_backend(tmp_path):
+    msg = detect.missing_engine_message(tmp_path / "yolo11n_fp16_320.engine", "tensorrt")
+    assert "trtexec --onnx=yolo11n.onnx --saveEngine=" in msg and "yolo11n_fp16_320.engine" in msg
