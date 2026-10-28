@@ -111,6 +111,15 @@ python3 src/detect.py --engine models/yolo11n-pose_fp16_640.engine --track
 
 For INT8, `export.py` calibrates on `coco8-seg.yaml` / `coco8-pose.yaml` by default, because calibration needs masks or keypoints.
 
+### Threaded capture
+By default the loop is single-threaded, so the per-stage timings add up to the frame time. Add `--threaded` to read frames on a background thread instead, so capture overlaps with inference:
+
+```bash
+python3 src/detect.py --engine models/yolo11n_fp16_640.engine --threaded
+```
+
+With a camera, it always processes the newest frame and drops older ones; with a video file, it keeps every frame. The `capture` time then shows only how long the loop waited for a frame.
+
 ### Native install (without Docker)
 Needed for CSI cameras and preview windows, because it keeps JetPack's OpenCV:
 

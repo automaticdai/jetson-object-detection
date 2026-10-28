@@ -10,6 +10,7 @@ Examples:
     python3 src/detect.py --engine models/yolo11n_fp16_640.engine --source usb --classes person,car --conf 0.5
     python3 src/detect.py --engine models/yolo11n_int8_640.engine --source video.mp4 --save out.mp4 --headless
     python3 src/detect.py --engine models/yolo11n_fp16_640.engine --track            # keep IDs across frames
+    python3 src/detect.py --engine models/yolo11n_fp16_640.engine --threaded         # overlap capture and inference
 """
 import argparse
 import math
@@ -20,7 +21,7 @@ from pathlib import Path
 import cv2 as cv
 import numpy as np
 
-from camera import CameraError, add_camera_args, open_capture_from_args, window_error
+from camera import CameraError, ThreadedCapture, add_camera_args, open_capture_from_args, window_error
 from export import export_command, parse_engine_name
 from timing import StageTimer
 
@@ -47,6 +48,12 @@ def parse_args(argv=None):
         choices=["bytetrack", "botsort"],
         default=None,
         help="track objects across frames and label them with IDs (default tracker: bytetrack)",
+    )
+    parser.add_argument(
+        "--threaded",
+        action="store_true",
+        help="read frames on a background thread so capture overlaps with inference (higher FPS; "
+        "'capture' then shows only the wait for a frame)",
     )
     parser.add_argument("--save", type=Path, default=None, help="save the annotated video to this .mp4 file")
     parser.add_argument("--headless", action="store_true", help="do not open a window; print FPS and timings instead")
@@ -145,6 +152,9 @@ def main(argv=None):
         model = load_model(args.engine)
         classes = resolve_classes(args.classes, model.names)
         cap = open_capture_from_args(args)
+        if args.threaded:
+            # Cameras: always process the newest frame. Files: keep every frame.
+            cap = ThreadedCapture(cap, drop=args.source in ("csi", "usb"))
     except (RuntimeError, ValueError) as e:  # CameraError is a RuntimeError
         print(e)
         return 1

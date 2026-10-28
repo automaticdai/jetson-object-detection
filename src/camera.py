@@ -1,6 +1,8 @@
 """Shared camera input for Jetson: CSI cameras (GStreamer), USB webcams (V4L2) and video files."""
 import os
+import queue
 import re
+import threading
 
 import cv2 as cv
 
@@ -54,6 +56,65 @@ def open_capture(source, *, sensor_id=0, device=0, width=1280, height=720, fps=3
     if not cap.isOpened():
         raise CameraError(f"Failed to open camera source '{source}'.")
     return cap
+
+
+class ThreadedCapture:
+    """Reads frames on a background thread, so capture overlaps with inference.
+
+    drop=True (cameras): keep only the newest frame, so a slow consumer always gets a fresh one.
+    drop=False (video files): queue frames, so none are skipped.
+    Has the read() / get() / release() subset of cv.VideoCapture that the scripts use.
+    """
+
+    def __init__(self, cap, drop=True, queue_size=4):
+        self._cap = cap
+        self._drop = drop
+        self._queue = queue.Queue(maxsize=1 if drop else queue_size)
+        self._stopped = threading.Event()
+        self._done = False
+        self._thread = threading.Thread(target=self._run, daemon=True)
+        self._thread.start()
+
+    def _run(self):
+        ret = False
+        try:
+            while not self._stopped.is_set():
+                ret, frame = self._cap.read()
+                if not ret:
+                    break
+                if self._drop:
+                    try:
+                        self._queue.get_nowait()  # only this thread puts, so the slot is now free
+                    except queue.Empty:
+                        pass
+                self._put((True, frame))
+        finally:
+            # Blocks until the consumer has taken the last frame, so it is never dropped.
+            self._put((False, None))
+
+    def _put(self, item):
+        while not self._stopped.is_set():
+            try:
+                self._queue.put(item, timeout=0.1)
+                return
+            except queue.Full:
+                pass
+
+    def read(self):
+        if self._done:
+            return False, None
+        ret, frame = self._queue.get()
+        if not ret:
+            self._done = True
+        return ret, frame
+
+    def get(self, prop):
+        return self._cap.get(prop)
+
+    def release(self):
+        self._stopped.set()
+        self._thread.join(timeout=2)
+        self._cap.release()
 
 
 def open_capture_from_args(args):

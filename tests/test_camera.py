@@ -111,3 +111,59 @@ def test_usb_requests_mjpg_before_resolution(monkeypatch):
     props = [prop for prop, _ in calls]
     assert calls[0] == (cv.CAP_PROP_FOURCC, cv.VideoWriter_fourcc(*"MJPG"))
     assert props.index(cv.CAP_PROP_FOURCC) < props.index(cv.CAP_PROP_FRAME_WIDTH)
+
+class FakeCapture:
+    """Yields frames 0..n-1 (as ints), then end of stream."""
+
+    def __init__(self, n, delay=0.0):
+        self.n, self.delay, self.i, self.released = n, delay, 0, False
+
+    def read(self):
+        import time
+
+        time.sleep(self.delay)
+        if self.i >= self.n:
+            return False, None
+        self.i += 1
+        return True, self.i - 1
+
+    def get(self, prop):
+        return 25.0
+
+    def release(self):
+        self.released = True
+
+
+def read_all(cap):
+    frames = []
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            return frames
+        frames.append(frame)
+
+
+def test_threaded_capture_keeps_every_frame_without_drop():
+    cap = camera.ThreadedCapture(FakeCapture(50), drop=False)
+    assert read_all(cap) == list(range(50))
+    assert cap.read() == (False, None)  # stays at end of stream
+    cap.release()
+
+
+def test_threaded_capture_drop_returns_newest_frames():
+    import time
+
+    cap = camera.ThreadedCapture(FakeCapture(200, delay=0.001), drop=True)
+    time.sleep(0.05)  # slow consumer: frames pile up and old ones are dropped
+    frames = read_all(cap)
+    assert frames == sorted(frames) and len(frames) < 200
+    assert frames[-1] == 199  # the newest frame is never dropped
+    cap.release()
+
+
+def test_threaded_capture_release_stops_thread_and_passes_get():
+    fake = FakeCapture(10**9)
+    cap = camera.ThreadedCapture(fake, drop=False)
+    assert cap.get(cv.CAP_PROP_FPS) == 25.0
+    cap.release()
+    assert fake.released and not cap._thread.is_alive()
