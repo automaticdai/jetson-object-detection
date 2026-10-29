@@ -8,6 +8,10 @@ shopt -s nullglob
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
+# Pinned so an Ultralytics release can't change the demo's behaviour unannounced.
+# Bump deliberately after re-testing; --image overrides it.
+ULTRALYTICS_VERSION="8.4.191"
+
 IMAGE=""
 if [[ "${1:-}" == "--image" ]]; then
     IMAGE="${2:?--image needs a value}"
@@ -19,8 +23,8 @@ if [[ -z "$IMAGE" ]]; then
     # `|| true`: without it, a missing file would abort the script silently under `set -euo pipefail`.
     release="$(head -n1 /etc/nv_tegra_release 2>/dev/null | sed -n 's/^# R\([0-9]*\).*/\1/p' || true)"
     case "$release" in
-        36) IMAGE="ultralytics/ultralytics:latest-jetson-jetpack6" ;;  # JetPack 6 (Orin)
-        38) IMAGE="ultralytics/ultralytics:latest-nvidia-arm64" ;;     # JetPack 7.0 (Thor)
+        36) IMAGE="ultralytics/ultralytics:${ULTRALYTICS_VERSION}-jetson-jetpack6" ;;  # JetPack 6 (Orin)
+        38) IMAGE="ultralytics/ultralytics:${ULTRALYTICS_VERSION}-nvidia-arm64" ;;     # JetPack 7.0 (Thor)
         *)
             echo "Unknown or unsupported Jetson Linux release 'R${release:-?}'. Pass --image IMAGE." >&2
             exit 1
