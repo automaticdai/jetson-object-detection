@@ -120,6 +120,15 @@ python3 src/detect.py --engine models/yolo11n_fp16_640.engine --threaded
 
 With a camera, it always processes the newest frame and drops older ones; with a video file, it keeps every frame. The `capture` time then shows only how long the loop waited for a frame.
 
+### Watch in a browser
+No monitor on the Jetson? Add `--stream PORT` and open `http://<jetson-ip>:PORT/` in a browser on any device on the same network:
+
+```bash
+python3 src/detect.py --engine models/yolo11n_fp16_640.engine --headless --stream 8080
+```
+
+This also works inside the Docker container, which `docker/run.sh` starts with host networking. The stream is plain MJPEG over HTTP with no password: **anyone who can reach the port can watch the camera**. Use `--stream-host 127.0.0.1` to serve it to the Jetson only, and an SSH tunnel (`ssh -L 8080:localhost:8080 jetson`) to view it from your PC.
+
 ### Native install (without Docker)
 Needed for CSI cameras and preview windows, because it keeps JetPack's OpenCV:
 

@@ -32,7 +32,8 @@ if [[ -z "$IMAGE" ]]; then
     esac
 fi
 
-args=(--rm -i --runtime nvidia --ipc=host -v "$REPO_DIR:/app" -w /app)
+# --network host: so `detect.py --stream PORT` is reachable on the Jetson's own IP.
+args=(--rm -i --runtime nvidia --ipc=host --network host -v "$REPO_DIR:/app" -w /app)
 [[ -t 0 ]] && args+=(-t)
 
 for dev in /dev/video*; do
