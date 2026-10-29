@@ -1,5 +1,7 @@
 """Live YOLO object detection on Jetson with a TensorRT engine.
 
+Detection, instance segmentation (-seg) and pose (-pose) models all work; the task is read from the engine.
+
 Build an engine on this device first:
     python3 src/export.py --model yolo11n --precision fp16
 
@@ -114,7 +116,8 @@ def run_model(model, frame, args, classes):
 def load_model(engine):
     from ultralytics import YOLO
 
-    model = YOLO(str(engine), task="detect")
+    # No task= here: Ultralytics reads it from the engine's metadata, so -seg and -pose engines work too.
+    model = YOLO(str(engine))
     try:
         # The engine is loaded lazily on the first predict; do it now so the first real frame's timing is honest.
         model.predict(np.zeros((640, 640, 3), dtype=np.uint8), verbose=False)

@@ -99,6 +99,18 @@ python3 src/detect.py --engine models/yolo11n_fp16_640.engine --track botsort   
 
 Ultralytics installs the tracker's `lap` dependency on first use if it is missing, so the first run needs a network connection.
 
+### Segmentation and pose estimation
+Export a `-seg` or `-pose` model instead; `detect.py` reads the task from the engine and draws masks or skeletons:
+
+```bash
+python3 src/export.py --model yolo11n-seg --precision fp16     # instance segmentation
+python3 src/export.py --model yolo11n-pose --precision fp16    # human pose (keypoints)
+python3 src/detect.py --engine models/yolo11n-seg_fp16_640.engine
+python3 src/detect.py --engine models/yolo11n-pose_fp16_640.engine --track
+```
+
+For INT8, `export.py` calibrates on `coco8-seg.yaml` / `coco8-pose.yaml` by default, because calibration needs masks or keypoints.
+
 ### Native install (without Docker)
 Needed for CSI cameras and preview windows, because it keeps JetPack's OpenCV:
 

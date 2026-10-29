@@ -94,3 +94,18 @@ def test_main_unknown_model_exits_1(monkeypatch, tmp_path, capsys):
     assert export.main(["--model", "yolov11n"]) == 1
     out = capsys.readouterr().out
     assert "Could not find or download 'yolov11n.pt'" in out
+
+
+@pytest.mark.parametrize("model, data", [
+    ("yolo11n", "coco8.yaml"),
+    ("yolo11s-seg", "coco8-seg.yaml"),
+    ("yolo11n-pose", "coco8-pose.yaml"),
+])
+def test_default_calib_data_matches_task(model, data):
+    assert export.default_calib_data(model) == data
+
+
+def test_seg_engine_name_round_trips():
+    path = export.engine_path("yolo11n-seg", "int8", 640, models_dir="m")
+    assert path.name == "yolo11n-seg_int8_640.engine"
+    assert export.parse_engine_name(path) == ("yolo11n-seg", "int8", 640)
