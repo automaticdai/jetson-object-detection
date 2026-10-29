@@ -88,3 +88,40 @@ def test_main_missing_engine_exits_1(tmp_path, capsys):
     rc = detect.main(["--engine", str(tmp_path / "yolo11n_fp16_640.engine"), "--headless"])
     assert rc == 1
     assert "python3 src/export.py --model yolo11n --precision fp16 --imgsz 640" in capsys.readouterr().out
+
+
+def test_track_flag():
+    assert detect.parse_args(["--engine", "m.engine"]).track is None
+    assert detect.parse_args(["--engine", "m.engine", "--track"]).track == "bytetrack"
+    assert detect.parse_args(["--engine", "m.engine", "--track", "botsort"]).track == "botsort"
+    with pytest.raises(SystemExit):
+        detect.parse_args(["--engine", "m.engine", "--track", "sort"])
+
+
+class FakeModel:
+    def __init__(self):
+        self.calls = []
+
+    def predict(self, frame, **kwargs):
+        self.calls.append(("predict", kwargs))
+        return ["result"]
+
+    def track(self, frame, **kwargs):
+        self.calls.append(("track", kwargs))
+        return ["result"]
+
+
+def test_run_model_predicts_without_track():
+    model = FakeModel()
+    args = detect.parse_args(["--engine", "m.engine", "--conf", "0.4"])
+    assert detect.run_model(model, None, args, [0]) == "result"
+    assert model.calls == [("predict", {"conf": 0.4, "classes": [0], "verbose": False})]
+
+
+def test_run_model_tracks_with_persistent_state():
+    model = FakeModel()
+    args = detect.parse_args(["--engine", "m.engine", "--track", "botsort"])
+    detect.run_model(model, None, args, None)
+    method, kwargs = model.calls[0]
+    assert method == "track"
+    assert kwargs["persist"] is True and kwargs["tracker"] == "botsort.yaml"
