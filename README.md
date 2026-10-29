@@ -9,18 +9,18 @@ Following the success of my other project, [rpi-object-detection](https://github
 Star the project and stay tuned!
 
 ## Hardware
-This repo is developed with Jetson AGX Orin, and it should support the following hardware:
+This repo is developed with Jetson AGX Orin and Jetson Nano, and it should support the following hardware:
 
 - Jetson AGX Thor (2025)
 - Jetson Orin Nano Super (2024)
 - Jetson AGX Orin (2023)
 - Jetson Orin NX (2023)
 - Jetson Orin Nano (2023)
+- Jetson Nano (2019): detection runs through the TensorRT backend, see [Jetson Nano](#jetson-nano-tensorrt-backend). Tested on JetPack 4.6.1 with an IMX219 CSI camera.
 
-Older boards can't run the Ultralytics-based detection demo, because it needs JetPack 6+ (Python 3.10, recent TensorRT and PyTorch):
+Older boards can't run the Ultralytics-based detection demo, because it needs JetPack 6+ (Python 3.10, recent TensorRT and PyTorch), and haven't been tested with the TensorRT backend:
 
 - Jetson Xavier NX (2020)
-- Jetson Nano (2019): supported through the TensorRT backend, see [Jetson Nano](#jetson-nano-tensorrt-backend). Tested on JetPack 4.6.1 with an IMX219 CSI camera.
 - Jetson AGX Xavier (2018)
 - Jetson TX2 (2017)
 - Jetson TX1 (2015)
