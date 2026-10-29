@@ -1,8 +1,16 @@
 """Serve frames as an MJPEG stream over HTTP, so any browser can watch a headless Jetson."""
 import threading
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from http.server import BaseHTTPRequestHandler, HTTPServer
+from socketserver import ThreadingMixIn
 
 import cv2 as cv
+
+
+class ThreadingHTTPServer(ThreadingMixIn, HTTPServer):
+    """http.server.ThreadingHTTPServer, which Python 3.6 (Jetson Nano) doesn't have yet."""
+
+    daemon_threads = True
+
 
 BOUNDARY = "frame"
 PAGE = b"""<!doctype html>

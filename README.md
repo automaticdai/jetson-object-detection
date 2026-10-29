@@ -9,18 +9,18 @@ Following the success of my other project, [rpi-object-detection](https://github
 Star the project and stay tuned!
 
 ## Hardware
-This repo is developed with Jetson AGX Orin, and it should support the following hardware:
+This repo is developed with Jetson AGX Orin and Jetson Nano, and it should support the following hardware:
 
 - Jetson AGX Thor (2025)
 - Jetson Orin Nano Super (2024)
 - Jetson AGX Orin (2023)
 - Jetson Orin NX (2023)
 - Jetson Orin Nano (2023)
+- Jetson Nano (2019): detection runs through the TensorRT backend, see [Jetson Nano](#jetson-nano-tensorrt-backend). Tested on JetPack 4.6.1 with an IMX219 CSI camera.
 
-Older boards are not supported by the detection demo, because it needs JetPack 6+ (Python 3.10, recent TensorRT and PyTorch):
+Older boards can't run the Ultralytics-based detection demo, because it needs JetPack 6+ (Python 3.10, recent TensorRT and PyTorch), and haven't been tested with the TensorRT backend:
 
 - Jetson Xavier NX (2020)
-- Jetson Nano (2019): `src/camera_test.py` works (tested on JetPack 4.6.1 with an IMX219 CSI camera), but `src/detect.py` does not.
 - Jetson AGX Xavier (2018)
 - Jetson TX2 (2017)
 - Jetson TX1 (2015)
@@ -155,6 +155,41 @@ Needed for CSI cameras and preview windows, because it keeps JetPack's OpenCV:
    pip uninstall -y opencv-python opencv-python-headless
    python3 -c "import cv2; print([l for l in cv2.getBuildInformation().splitlines() if 'GStreamer' in l])"   # should say YES
    ```
+
+## Jetson Nano (TensorRT backend)
+The Nano is stuck on JetPack 4 (Python 3.6, TensorRT 8.2), which Ultralytics doesn't support. `detect.py` and `benchmark.py` can instead run a YOLO detection engine with TensorRT directly (`--backend tensorrt`, picked automatically when Ultralytics isn't installed). It needs nothing beyond JetPack: no PyTorch, no pycuda.
+
+**1. Export the model to ONNX on a PC** (any machine with `pip install ultralytics`). Use opset 12, which TensorRT 8.2 supports, and 320 for the best speed on the Nano:
+
+```bash
+yolo export model=yolo11n.pt format=onnx opset=12 imgsz=320
+```
+
+**2. Build the engine on the Nano** (takes about 10 minutes; engines only run on the device they were built on):
+
+```bash
+mkdir -p models && cp /path/to/yolo11n.onnx models/
+/usr/src/tensorrt/bin/trtexec --onnx=models/yolo11n.onnx --saveEngine=models/yolo11n_fp16_320.engine --fp16
+```
+
+**3. Run it** with any of the usual options (`--source`, `--classes`, `--save`, `--headless`, `--threaded`, `--stream`):
+
+```bash
+python3 src/detect.py --engine models/yolo11n_fp16_320.engine
+python3 src/detect.py --engine models/yolo11n_fp16_320.engine --headless --stream 8080
+python3 src/benchmark.py --engines models/yolo11n_fp16_320.engine --source image_or_video
+```
+
+The TensorRT backend supports YOLOv8 / YOLO11 **detection** models (COCO class names built in; a custom model's classes are numbered). Tracking, segmentation and pose need the Ultralytics backend.
+
+Measured with `src/benchmark.py` on a Jetson Nano 4GB (JetPack 4.6.1, MAXN), yolo11n FP16:
+
+| Input size | FPS | Pre (ms) | Infer (ms) | Post (ms) |
+|---|---|---|---|---|
+| 320 | 31.3 | 7.9 | 21.3 | 2.7 |
+| 640 | 11.0 | 22.2 | 59.2 | 9.4 |
+
+Live with the CSI camera at 1280x720, the 320 engine runs at ~29 FPS. Saving video (`--save`) is expensive on the Nano's CPU: ~80 ms per 720p frame (~9 FPS overall), ~24 ms at `--width 640 --height 480` (~18 FPS). The `save` time is shown with the other stages.
 
 ## Troubleshooting
 - **CSI camera fails to open** (e.g. `Failed to create CaptureSession`): check it is detected (`ls /dev/video*`), then restart the camera daemon with `sudo systemctl restart nvargus-daemon`. Stopping a program with Ctrl+C while it holds the camera can leave the daemon in this state.
